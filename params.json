@@ -1,7 +1,7 @@
 {
     "data": {
-        "location": "./dat/data60.xlsx",
-        "adj_location": "./dat/data60_adj.xlsx"
+        "location": "./dat/data63.csv",
+        "adj_location": "./dat/data63_adj.xlsx"
     },
     "belief": {},
     "aesthetics": {},
@@ -12,7 +12,7 @@
     }, "policy": {
         "idata_location": "./out/posteriors/policy.nc",
         "resample": false, 
-        "save_model_fitting_ipynb":false, 
+        "save_model_fitting_ipynb":true, 
         "chains": 4,
         "draws": 1000,
         "target_accept": 0.95,
@@ -25,7 +25,7 @@
     },"wept": {
         "idata_location": "./out/posteriors/wept.nc",
         "resample": false, 
-        "save_model_fitting_ipynb":false, 
+        "save_model_fitting_ipynb":true, 
         "chains": 4,
         "draws": 1000,
         "target_accept": 0.95,
@@ -42,9 +42,9 @@
     "share": {
         "idata_location": "./out/posteriors/share.nc",
         "resample": false, 
-        "save_model_fitting_ipynb":false, 
+        "save_model_fitting_ipynb":true, 
         "chains": 4,
-        "draws": 2000,
+        "draws": 1000,
         "target_accept": 0.95,
         "tune": 1000,
         "sim_country_count":10, 
@@ -59,11 +59,11 @@
     "belief": {
         "idata_location": "./out/posteriors/belief.nc",
         "resample": false, 
-        "save_model_fitting_ipynb":false, 
+        "save_model_fitting_ipynb":true, 
         "chains": 4,
         "draws": 1000,
-        "target_accept": 0.95,
-        "tune": 2000,
+        "target_accept": 0.90,
+        "tune": 1000,
         "sim_country_count":10, 
         "sim_n_per":50,
         "sim_items":4,

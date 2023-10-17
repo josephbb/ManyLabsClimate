@@ -12,7 +12,8 @@ def flip(items, ncol):
 
 
 # Define the list of category names
-categories = ['SystemJust', 'SciConsens', 'CollectAction', 'Control', 'NegativeEmotions', 'LetterFuture', 'PluralIgnorance', 'PsychDistance', 'FutureSelfCont', 'NormativeAppeal', 'BindingMoral', 'DynamicNorm', 'aaControl']
+categories = ['SystemJust', 'SciConsens', 'CollectAction', 'Control', 'NegativeEmotions', 'Letter2Future', 'PluralIgnorance', 'PsychDistance', 
+              'FutureSelfCont', 'Identity-Social-Norms-Intervention', 'BindingMoral', 'DynamicNorm', 'aaControl']
 
 # Use the specified color palette
 sns.set_palette([

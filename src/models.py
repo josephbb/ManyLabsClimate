@@ -39,105 +39,47 @@ def get_policy_model(df):
         value_name="Policy",
     )
 
-    print(df_policy.shape)
 
     df_policy = df_policy.dropna(axis=0)
     df_policy["Policy"].replace({"sesenta": 60.0}, inplace=True)
     df_policy["Policy"] = df_policy["Policy"].astype("float")
+    #take the average of "policy" for each uniqueID and keep all other variables
+    df_policy = df_policy.groupby(["UniqueID", "Country", "condName", "BeliefADJ"]).mean().reset_index()
 
-    # This function is necessary for GPU compatibility
-    # as the full logp is calculated on the GPU
-    # and values that are 1 and 0 are evaluated as -inf
-    # causing sampling to fail.
-    def transform_y_for_gpu_ZOIB(y):
-        y = np.round(y, 2)
-        y[y == 1.0] = 0.99999
-        y[y == 0.0] = 0.00001
-        return y
-
-    # Factorize the categorical variables
     country_idxs, countries = pd.factorize(df_policy.Country)
     treatment_idxs, treatments = pd.factorize(df_policy.condName)
     participant_idxs, participants = pd.factorize(df_policy.UniqueID)
-    item_idxs, items = pd.factorize(df_policy.Item)
 
-    df_policy["country_idx"] = country_idxs
-    df_policy["treatment_idxs"] = treatment_idxs
-
-    # Particpant treatment and country variables
-    p_t = df_policy.groupby([participant_idxs]).first()["treatment_idxs"].values
-    p_c = df_policy.groupby([participant_idxs]).first()["country_idx"].values
-
-    # Standardize belief
-    df_policy["Belief"] = df_policy["BeliefADJ"]
-
-    # Construct coordinates for the model
     coords = {
         "treatments": treatments,
         "countries": countries,
         "participants": participants,
-        "obs_id": np.arange(len(country_idxs)),
-        "items": items,
-    }
-    coords.update({"effect": ["intercept", "belief"]})
+        "effect": ["intercept", "belief"]}
+
 
     with pm.Model(coords=coords) as model:
         # Mutable data for posterior predictive sampling
         country_idx = pm.MutableData("country_idx", country_idxs)
         treatment_idx = pm.MutableData("treatment_idx", treatment_idxs)
         participant_idx = pm.MutableData("participant_idx", participant_idxs)
-        participant_country = pm.MutableData("participant_country", p_c)
-        participant_treatment = pm.MutableData("participant_treatment", p_t)
-        Belief = pm.MutableData("Belief", df_policy.Belief.values)
+        BeliefADJ = pm.MutableData("Belief", df_policy['BeliefADJ'].values)
         country_predict = pm.MutableData("country_pred", [0])
         treatment_predict = pm.MutableData("treatment_pred", [0])
         bool_country = pm.MutableData("bool_country", [0])
         sim_belief = pm.MutableData("sim_belief", [0.0])
         y = pm.MutableData("y",  transform_y_for_gpu_ZOIB(df_policy.Policy.values / 100.0), dims="obs_id")
-        u_σ_c = pm.Exponential.dist(lam=2)
-        u_σ_t = pm.Exponential.dist(lam=2)
+    
 
-        # Obtain Cholesky factor for the covariance
-        L_c, _, _ = pm.LKJCholeskyCov(
-            "L_c", n=2, eta=4, sd_dist=u_σ_c, compute_corr=True, store_in_trace=False
-        )
+        u_c = pm.ZeroSumNormal("u_c", .5, dims=("effect", "countries")).T
+        u_t = pm.ZeroSumNormal("u_t", .25, dims=( "effect", "treatments")).T
 
-        L_t, _, _ = pm.LKJCholeskyCov(
-            "L_t", n=2, eta=4, sd_dist=u_σ_t, compute_corr=True, store_in_trace=False
-        )
-
-        # # Parameters
-        u_raw_c = pm.Normal("u_raw_c", mu=0, sigma=1, dims=("effect", "countries"))
-        u_c = pm.Deterministic(
-            "u_c", at.dot(L_c, u_raw_c).T, dims=("countries", "effect")
-        )
-        u_raw_t = pm.Normal("u_raw_t", mu=0, sigma=1, dims=("effect", "treatments"))
-        u_t = pm.Deterministic(
-            "u_t", at.dot(L_t, u_raw_t).T, dims=("treatments", "effect")
-        )
-
+        #Average Parameters
         Alpha = pm.Normal("Alpha", 0, 1)
-        Beta = pm.Normal("Beta", 0, 0.5)
+        Beta = pm.Normal("Beta", 0, 0.1)
 
-        Item = pm.ZeroSumNormal("Item", 0.5, dims="items")
-
-        participant_intercept = pm.Normal(
-            "pi",
-            u_c[participant_country, 0] + u_t[participant_treatment, 0] + Alpha,
-            0.5,
-            dims="participants",
-        )
-        participant_slope = pm.Normal(
-            "ps",
-            u_c[participant_country, 1] + u_t[participant_treatment, 1] + Beta,
-            0.5,
-            dims="participants",
-        )
 
         mu = (
-            participant_intercept[participant_idx]
-            + participant_slope[participant_idx] * Belief
-            + Item[item_idxs]
+            u_c[country_idx, 0] + u_t[treatment_idx, 0] + Alpha + (u_c[country_idx, 1] + u_t[treatment_idx, 1] + Beta)*BeliefADJ
         )
 
         kappa = pm.Gamma("kappa", 7.5, 1)
@@ -167,16 +109,17 @@ def get_policy_model(df):
             kappa=kappa,
             tau=pm.invlogit(mu*tau_offset + mu),
             observed=y,
-            shape=Belief.shape,
+            shape=BeliefADJ.shape,
         )
-        return model, df_policy
+    return model, df_policy
+
 
 
 def get_share_model(df, priors):
 
     df["UniqueID"] = np.arange(df.shape[0])
     df_SHARE = pd.melt(
-        df.loc[:, ["UniqueID", "Country", "condName", "BeliefADJ", "SHAREcc"]],
+        df.loc[:, ["UniqueID", "Country", "condName", "BeliefADJ", "Share"]],
         id_vars=[
             "UniqueID",
             "Country",
@@ -229,27 +172,8 @@ def get_share_model(df, priors):
         y = pm.MutableData("y", temp.SHARE)
         sim_belief = pm.MutableData("sim_belief", [0.0])
 
-        u_σ_c = pm.Exponential.dist(lam=priors['lambda_val'])
-        u_σ_t = pm.Exponential.dist(lam=priors['lambda_val'])
-
-        # Obtain Cholesky factor for the covariance
-        L_c, _, _ = pm.LKJCholeskyCov(
-            "L_c", n=2, eta=2, sd_dist=u_σ_c, compute_corr=True, store_in_trace=False
-        )
-
-        L_t, _, _ = pm.LKJCholeskyCov(
-            "L_t", n=2, eta=2, sd_dist=u_σ_t, compute_corr=True, store_in_trace=False
-        )
-
-        # # Parameters
-        u_raw_c = pm.Normal("u_raw_c", mu=0, sigma=1, dims=("effect", "countries"))
-        u_c = pm.Deterministic(
-            "u_c", at.dot(L_c, u_raw_c).T, dims=("countries", "effect")
-        )
-        u_raw_t = pm.Normal("u_raw_t", mu=0, sigma=1, dims=("effect", "treatments"))
-        u_t = pm.Deterministic(
-            "u_t", at.dot(L_t, u_raw_t).T, dims=("treatments", "effect")
-        )
+        u_c = pm.ZeroSumNormal("u_c", .5, dims=("effect", "countries")).T
+        u_t = pm.ZeroSumNormal("u_t", .25, dims=( "effect", "treatments")).T
 
         country_intercept_theta = pm.Deterministic(
             "country_intercept_theta", u_c[:, 0], dims="countries"
@@ -365,24 +289,8 @@ def get_WEPT_model(df, priors):
         u_σ_c = pm.Exponential.dist(lam=priors['lambda_val'])
         u_σ_t = pm.Exponential.dist(lam=priors['lambda_val'])
 
-        # Obtain Cholesky factor for the covariance
-        L_c, _, _ = pm.LKJCholeskyCov(
-            "L_c", n=4, eta=2, sd_dist=u_σ_c, compute_corr=True, store_in_trace=False
-        )
-
-        L_t, _, _ = pm.LKJCholeskyCov(
-            "L_t", n=4, eta=2, sd_dist=u_σ_t, compute_corr=True, store_in_trace=False
-        )
-
-        # # Parameters
-        u_raw_c = pm.Normal("u_raw_c", mu=0, sigma=1, dims=("effect", "countries"))
-        u_c = pm.Deterministic(
-            "u_c", at.dot(L_c, u_raw_c).T, dims=("countries", "effect")
-        )
-        u_raw_t = pm.Normal("u_raw_t", mu=0, sigma=1, dims=("effect", "treatments"))
-        u_t = pm.Deterministic(
-            "u_t", at.dot(L_t, u_raw_t).T, dims=("treatments", "effect")
-        )
+        u_c = pm.ZeroSumNormal("u_c", .5, dims=("effect", "countries")).T
+        u_t = pm.ZeroSumNormal("u_t", .25, dims=( "effect", "treatments")).T
 
         country_intercept_geom = pm.Deterministic(
             "country_intercept_geom", u_c[:, 0], dims="countries"
@@ -573,7 +481,9 @@ def get_belief_model(df, priors):
         item = pm.ZeroSumNormal("item", sigma=sigma_item, dims="items")
         
         # Let's assume that items may lead to more consistent or more divergent resposne across countries
-        kappa = pm.Gamma("kappa", alpha=7.5, beta=1)
+        alpha_prior = pm.Uniform("alpha_prior", 2, 20)
+        beta_prior = pm.Uniform("beta_prior", 0, 2)
+        kappa = pm.Gamma("kappa", alpha=alpha_prior, beta=beta_prior, dims="countries")
         
 
         # We assume that participants have a mean belief that is a function of their country
@@ -610,7 +520,7 @@ def get_belief_model(df, priors):
         y_out = ZOIBProportion(
             "y_out",
             mu=pm.invlogit(belief),
-            kappa=kappa,
+            kappa=kappa[country_idx],
             theta=pm.invlogit(alpha_theta + beta_theta * pm.math.abs(belief)), 
             tau=pm.invlogit(belief),
             observed=y,
