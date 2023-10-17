@@ -55,7 +55,7 @@ def plot_by_belief(sim_model, idata_sim,
                    treatment_name='treatment_sim',
                    ylim=(-10,10),
                    mult=100,
-                   ylabel='None',relabel=None):
+                   ylabel='None',relabel=None, wept=False):
     with sim_model:
         x_sim = np.linspace(x_sim_low, x_sim_high, res)
         x_sim = logit(x_sim)
@@ -101,7 +101,11 @@ def plot_by_belief(sim_model, idata_sim,
         handles, labels = plt.gca().get_legend_handles_labels()
         if relabel is not None:
             labels = relabel(labels)
-        plt.legend(flip(handles, 2), flip(labels, 2),loc=4, ncol=2,title='Intervention',prop={'size': 8})
+        
+        if wept:
+            plt.legend(flip(handles, 2), flip(labels, 2),loc=2, ncol=2,title='Intervention',prop={'size': 8})
+        else:
+            plt.legend(flip(handles, 2), flip(labels, 2),loc=4, ncol=2,title='Intervention',prop={'size': 8})
 
         avg = avg
         plt.ylim(ylim)
@@ -133,19 +137,19 @@ def plot_country_forest(idata, ls, mean, ax, xlabel='Sharing(%)', wept=False):
     plt.xlabel(xlabel, fontsize=16)
     plt.tight_layout()
     
-def plot_ATE_data(idata, ls, ax, xlabel='Sharing(%)', xlim=(-15,15), xticks=[-15,-10,-5,0,5,10,15], color='green'):
+def plot_ATE_data(idata, ls, ax, xlabel='Sharing(%)', xlim=(-15,15), xticks=[-15,-10,-5,0,5,10,15], color='green',lw=4, ms=5):
     plt.sca(ax)
     treatments = idata.coords["treatments"].values
-    az.plot_forest( [idata.sel({"treatments": t}) for t in treatments], linewidth=4, 
-                   textsize=10, markersize=10, combined=True, colors=color, legend=False, ax=ax)
+    az.plot_forest( [idata.sel({"treatments": t}) for t in treatments], linewidth=lw, 
+                   textsize=10, markersize=ms, combined=True, colors=color, legend=False, ax=ax)
     locs, labels =plt.yticks()
     ax.set_facecolor('white')
-    ylim = plt.ylim()
+    ax.set_ylim(-1.5, 43.5)
+    ylim = ax.get_ylim()
     plt.yticks(locs,ls[::-1])
     plt.title('')
     plt.xlim(xlim)
     plt.fill_between(plt.xlim(),[35, 35],color='white', zorder=1)
-    plt.plot([0, 0],plt.ylim(), '--', color='k', zorder=1)
     plt.xticks(xticks)
     plt.xlabel(xlabel)
         
