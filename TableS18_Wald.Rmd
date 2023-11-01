@@ -1,0 +1,361 @@
+---
+title: "Mada_climate_analysis"
+author: "Ke_Fang"
+date: "2023-10-30"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r warning=FALSE, message=F}
+library(tidyverse)
+library(lme4)
+library(ordinal)
+library(readxl)
+library(lmerTest)
+library(aod)
+```
+
+```{r}
+df <- read_xlsx("data/data63_forKay.xlsx")
+#glimpse(df)
+```
+
+```{r}
+df <- df %>% 
+  mutate(POLICYcc2 = as.numeric(POLICYcc),
+         BELIEFcc2 = as.numeric(BELIEFcc),
+         SHAREcc2 = as.numeric(SHAREcc),
+         SHAREcc2 = as.factor(SHAREcc2),
+         WEPTcc2 = as.numeric(WEPTcc),
+         WEPTcc2 = factor(WEPTcc2, order = T),
+         condName2 = as.factor(condName),
+         condName2 = relevel(condName2, ref = "Control"))
+#glimpse(df)
+```
+
+## Policy support
+
+### Need for random effect
+
+First, we can compare three models: the model only have condition as fixed effect, a model with condition as fixed effect and country as random effect, and a model with both condition and country as fixed effect (econmetric fixed effect model). Three models can be compared using AIC and BIC.
+
+Result:
+
+- For the fixed effect of conditions, all fixed effect's significance remained unchanged expect for BindingMoral. BindingMoral became not significant in the mixed-effect model and econmetric fixed effect model.
+- From AIC, the best model is the econmetric fixed effect model
+- From BIC, the best model is the mixed-effect model.
+
+```{r}
+M <- glm(POLICYcc2 ~ condName2, data = df %>% filter(!is.na(POLICYcc2), !is.na(condName2)), family = gaussian(link = "identity"))
+#print(summary(M))
+AIC(M)
+BIC(M)
+```
+
+```{r}
+M <- lmer(POLICYcc2 ~ condName2 + (1 | Country), data = df %>% filter(!is.na(POLICYcc2), !is.na(condName2)), REML = F) 
+# use ML estimator consistent as glm()
+#print(summary(M))
+AIC(M)
+BIC(M)
+```
+
+```{r}
+M <- glm(POLICYcc2 ~ condName2 + factor(Country), data = df %>% filter(!is.na(POLICYcc2), !is.na(condName2)), family = gaussian(link = "identity"))
+#print(summary(M))
+AIC(M)
+BIC(M)
+```
+
+### Significance for condition variable
+
+If we decide to go with the mixed-effect model (according to BIC standard):
+
+```{r}
+M <- lmer(POLICYcc2 ~ condName2 + (1 | Country), data = df %>% filter(!is.na(POLICYcc2), !is.na(condName2)), REML = T)
+print(summary(M))
+AIC(M)
+BIC(M)
+```
+
+#### Method 1: Wald Test
+
+Alternatively, a Wald test tests for whether the coefficient of one or a set of coefficient are equal to 0 (null H0: the expectation of the (joint) distribution of beta parameter(s) of interest is/are 0).
+
+**Result: the wald test is significant, suggesting the condition variables as a block has at least one or a combination of them is significantly different from zero.**
+
+```{r}
+condName2_indices <- grep("condName2", names(fixef(M)))
+wald.test(b = fixef(M),
+              	Sigma = vcov(M),
+              	Terms = condName2_indices)
+```
+
+#### Method 2: LRT test
+
+LRT compare the fit of two nested models. The LRT assesses whether the more complex model provides a significantly better fit to the data than the simpler model, justifying the inclusion of additional parameters.
+
+To perform the LRT test, we fit a alternative model without condition names:
+
+**Result: the significant LRT show that condition is needed for the model. AIC and BIC also support this.**
+
+For fixed effect: 
+```{r}
+M_alternative <- lmer(POLICYcc2 ~ 1 + (1 | Country), data = df %>% filter(!is.na(POLICYcc2), !is.na(condName2)))
+#print(summary(M_alternative))
+AIC(M_alternative)
+BIC(M_alternative)
+
+anova(M_alternative, M, refit = T) # use refit = T when fixed effect is different
+```
+
+## Belief
+
+### Need for random effect
+
+First, we can compare three models: the model only have condition as fixed effect, a model with condition as fixed effect and country as random effect, and a model with both condition and country as fixed effect (econmetric fixed effect model). Three models can be compared using AIC and BIC.
+
+Result:
+
+- For the fixed effect of conditions, all fixed effect's significance remained unchanged expect for PluralIgnorance. PluralIgnorance became  significant in the mixed-effect model and econmetric fixed effect model.
+- From AIC, the best model is the econometric fixed effect model
+- From BIC, the best model is the mixed-effect model.
+
+```{r}
+M <- glm(BELIEFcc2 ~ condName2, data = df %>% filter(!is.na(BELIEFcc2), !is.na(condName2)), family = gaussian(link = "identity"))
+#print(summary(M))
+AIC(M)
+BIC(M)
+```
+
+```{r}
+M <- lmer(BELIEFcc2 ~ condName2 + (1 | Country), data = df %>% filter(!is.na(BELIEFcc2), !is.na(condName2)), REML = F) 
+# use ML estimator consistent as glm()
+#print(summary(M))
+AIC(M)
+BIC(M)
+```
+
+```{r}
+M <- glm(BELIEFcc2 ~ condName2 + factor(Country), data = df %>% filter(!is.na(BELIEFcc2), !is.na(condName2)), family = gaussian(link = "identity"))
+#print(summary(M))
+AIC(M)
+BIC(M)
+```
+
+### Significance for condition variable
+
+If we decide to go with the mixed-effect model (according to BIC standard):
+
+```{r}
+M <- lmer(BELIEFcc2 ~ condName2 + (1 | Country), data = df %>% filter(!is.na(BELIEFcc2), !is.na(condName2)), REML = T)
+print(summary(M))
+AIC(M)
+BIC(M)
+```
+
+#### Method 1: Wald Test
+
+Alternatively, a Wald test tests for whether the coefficient of one or a set of coefficient are equal to 0 (null H0: the expectation of the (joint) distribution of beta parameter(s) of interest is/are 0).
+
+**Result: the wald test is significant, suggesting the condition variables as a block has at least one or a combination of them is significantly different from zero.**
+
+```{r}
+condName2_indices <- grep("condName2", names(fixef(M)))
+wald.test(b = fixef(M),
+              	Sigma = vcov(M),
+              	Terms = condName2_indices)
+```
+
+#### Method 2: LRT test
+
+LRT compare the fit of two nested models. The LRT assesses whether the more complex model provides a significantly better fit to the data than the simpler model, justifying the inclusion of additional parameters.
+
+To perform the LRT test, we fit a alternative model without condition names:
+
+**Result: the significant LRT show that condition is needed for the model. AIC and BIC also support this.**
+
+For fixed effect: 
+```{r}
+M_alternative <- lmer(BELIEFcc2 ~ 1 + (1 | Country), data = df %>% filter(!is.na(BELIEFcc2), !is.na(condName2)))
+#print(summary(M_alternative))
+AIC(M_alternative)
+BIC(M_alternative)
+
+anova(M_alternative, M, refit = T) # use refit = T when fixed effect is different
+```
+
+
+## Sharing
+
+### Need for random effect
+
+First, we can compare three models: the model only have condition as fixed effect, a model with condition as fixed effect and country as random effect, and a model with both condition and country as fixed effect (econmetric fixed effect model). Three models can be compared using AIC and BIC.
+
+Result:
+
+- For the fixed effect of conditions, all fixed effect's significance remained unchanged.
+- From AIC, the best model is the econometric fixed effect model.
+- From BIC, the best model is the mixed-effect model.
+
+```{r}
+M <- glm(SHAREcc2 ~ condName2, data = df %>% filter(!is.na(SHAREcc2), !is.na(condName2)), family = "binomial")
+#print(summary(M))
+AIC(M)
+BIC(M)
+```
+
+```{r}
+M <- glmer(SHAREcc2 ~ condName2 + (1 | Country), data = df %>% filter(!is.na(SHAREcc2), !is.na(condName2)), family = binomial) 
+# use ML estimator consistent as glm()
+#print(summary(M))
+AIC(M)
+BIC(M)
+```
+
+
+
+```{r}
+M <- glm(SHAREcc2 ~ condName2 + factor(Country), data = df %>% filter(!is.na(SHAREcc2), !is.na(condName2)), family = "binomial")
+#print(summary(M))
+AIC(M)
+BIC(M)
+```
+
+### Significance for condition variable
+
+If we decide to go with the mixed-effect model (according to BIC standard):
+
+```{r}
+M <- glmer(SHAREcc2 ~ condName2 + (1 | Country), data = df %>% filter(!is.na(SHAREcc2), !is.na(condName2)), family = binomial) 
+print(summary(M))
+AIC(M)
+BIC(M)
+```
+
+#### Method 1: Wald Test
+
+Alternatively, a Wald test tests for whether the coefficient of one or a set of coefficient are equal to 0 (null H0: the expectation of the (joint) distribution of beta parameter(s) of interest is/are 0).
+
+**Result: the wald test is significant, suggesting the condition variables as a block has at least one or a combination of them is significantly different from zero.**
+
+```{r}
+condName2_indices <- grep("condName2", names(fixef(M)))
+wald.test(b = fixef(M),
+              	Sigma = vcov(M),
+              	Terms = condName2_indices)
+```
+
+#### Method 2: LRT test
+
+LRT compare the fit of two nested models. The LRT assesses whether the more complex model provides a significantly better fit to the data than the simpler model, justifying the inclusion of additional parameters.
+
+To perform the LRT test, we fit a alternative model without condition names:
+
+**Result: the significant LRT show that condition is needed for the model. AIC and BIC also support this.**
+
+For fixed effect: 
+```{r}
+M_alternative <- glmer(SHAREcc2 ~ 1 + (1 | Country), data = df %>% filter(!is.na(SHAREcc2), !is.na(condName2)), family = binomial) 
+#print(summary(M_alternative))
+AIC(M_alternative)
+BIC(M_alternative)
+
+anova(M_alternative, M, refit = T) # use refit = T when fixed effect is different
+```
+
+
+## WEPT
+
+### Need for random effect
+
+First, we can compare three models: the model only have condition as fixed effect, a model with condition as fixed effect and country as random effect, and a model with both condition and country as fixed effect (econmetric fixed effect model). Three models can be compared using AIC and BIC.
+
+Result:
+
+- For the fixed effect of conditions, all fixed effect's significance remained unchanged.
+- From AIC, the best model is the econometric fixed effect model.
+- From BIC, the best model is the mixed-effect model.
+
+```{r}
+M <- clm(WEPTcc2 ~ condName2, data = df %>% filter(!is.na(WEPTcc2), !is.na(condName2)), threshold = "equidistant")
+#print(summary(M))
+AIC(M)
+BIC(M)
+```
+
+```{r}
+M <- clmm(WEPTcc2 ~ condName2 + (1 | Country), data = df %>% filter(!is.na(WEPTcc2), !is.na(condName2)), threshold = "equidistant") 
+# use ML estimator consistent as glm()
+print(summary(M))
+AIC(M)
+BIC(M)
+```
+
+
+
+```{r}
+M <- clm(WEPTcc2 ~ condName2 + factor(Country), data = df %>% filter(!is.na(WEPTcc2), !is.na(condName2)), threshold = "equidistant")
+#print(summary(M))
+AIC(M)
+BIC(M)
+```
+
+### Significance for condition variable
+
+If we decide to go with the mixed-effect model (according to BIC standard):
+
+```{r}
+M <- clmm(WEPTcc2 ~ condName2 + (1 | Country), data = df %>% filter(!is.na(WEPTcc2), !is.na(condName2)), threshold = "equidistant")
+print(summary(M))
+AIC(M)
+BIC(M)
+```
+
+#### Method 1: Wald test
+
+The Wald block test is less supported for clmm(), so let's do it by hand
+
+   \[
+   W = (\hat{\boldsymbol{\beta}} - \boldsymbol{\beta}_0)^\top \left[\text{Cov}(\hat{\boldsymbol{\beta}})\right]^{-1} (\hat{\boldsymbol{\beta}} - \boldsymbol{\beta}_0)
+   \]
+
+   where \( \hat{\boldsymbol{\beta}} \) is the vector of estimated coefficients, \( \boldsymbol{\beta}_0 \) is the vector of coefficients under the null hypothesis (often a vector of zeros), and \( \text{Cov}(\hat{\boldsymbol{\beta}}) \) is the covariance matrix of the estimated coefficients.
+
+The test statistic \( W \) follows, approximately, a chi-square distribution with degrees of freedom equal to the number of constraints being tested (the number of fixed effects being simultaneously evaluated).
+
+**Result: the Wald test is significant p < .001**
+
+```{r}
+W = t(M$coefficients[3:13]) %*% solve(vcov(M)[3:13,3:13]) %*% M$coefficients[3:13]
+
+1 - pchisq(W, df = 11)
+```
+
+#### Method 2: LRT test
+
+LRT compare the fit of two nested models. The LRT assesses whether the more complex model provides a significantly better fit to the data than the simpler model, justifying the inclusion of additional parameters.
+
+To perform the LRT test, we fit a alternative model without condition names:
+
+**Result: the significant LRT show that condition is needed for the model. AIC and BIC also support this.**
+
+For fixed effect: 
+```{r}
+M_alternative <- clmm(WEPTcc2 ~ 1 + (1 | Country), data = df %>% filter(!is.na(WEPTcc2), !is.na(condName2)), threshold = "equidistant") 
+#print(summary(M_alternative))
+AIC(M_alternative)
+BIC(M_alternative)
+
+anova(M_alternative, M) # use refit = T when fixed effect is different
+```
+
+
+
+
+
